@@ -1,0 +1,9 @@
+---
+# vars file
+#
+# Proxmox API login informations
+pve_api_user: <user@realm>
+pve_api_token_id: <user_api_token_id>
+pve_api_token_secret: <user_api_token_secret>
+# IP or FQDN of you pve host that will be receiving api calls 
+pve_api_host: pve.domain.loc

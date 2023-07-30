@@ -1,0 +1,152 @@
+---
+# tasks file
+#
+- name: Guest os Patching
+  tags: [ never, update, kernelup ]
+  block:
+  - name: Running checks
+    assert:
+      that:
+        - playbook_path is defined
+        - playbook_path is file
+        - snapshot_name is defined
+    delegate_to: localhost
+    run_once: yes
+        
+  - name: Checking vm IDs values
+    assert:
+      that: 
+        - item | regex_search('[0-9]{3}$')
+    with_items: "{{ pve_vm_ids | flatten }}"
+    delegate_to: localhost
+    run_once: yes
+
+  - name: Snapshot proxmox guest
+    community.general.proxmox_snap:
+      api_user: "{{ pve_api_user }}"
+      api_token_id: "{{ pve_api_token_id }}"
+      api_token_secret: "{{ pve_api_token_secret }}"
+      api_host: "{{ pve_api_host }}"
+      vmid: "{{ item }}"
+      state: present
+      vmstate: no
+      snapname: "{{ snapshot_name }}"
+    loop: "{{ pve_vm_ids | flatten }}"
+    delegate_to: localhost
+    run_once: yes
+
+  - name: Gather the date for the snapshot removal cron
+    shell: "date -d +{{ snapshot_removal_delay }}days '+%d %m'"
+    register: snapshot_rm_date
+    delegate_to: localhost
+    run_once: yes
+
+  - name: Schedule snapshot removal cron {{ snapshot_removal_delay }}days later
+    cron:
+      name: Guest patching - backup snapshot removal
+      cron_file: /etc/cron.d/guest_patching_-_backup_snapshot_removal
+      minute: "{{ snapshot_rm_minute }}"
+      hour: "{{ snapshot_rm_hour }}"
+      day: "{{ snapshot_rm_date.stdout.split(' ')[0] }}"  
+      month: "{{ snapshot_rm_date.stdout.split(' ')[1] }}"  
+      user: root
+      job: "/usr/bin/ansible-playbook {{ playbook_path }} --tags snaprm"
+      state: present
+    delegate_to: localhost
+    run_once: yes
+
+  - name: Update RHEL based OS
+    dnf:
+      name: "*"
+      state: latest
+    register: rhel_dnf_output
+    when: ansible_os_family == 'RedHat'
+
+  - name: Update Debian based OS
+    apt:
+      update_cache: yes
+      upgrade: yes
+    register: debian_apt_output
+    when: ansible_os_family == 'Debian'
+
+# Comment this out if you need debug info on the patching tasks
+#  - name: RHEL based OS patching output
+#    debug:
+#      msg: "{{ rhel_dnf_output.results }}"
+#    when: ansible_os_family == 'RedHat' and rhel_dnf_output.results is defined
+#  - name: Debian based OS patching output
+#    debug:
+#      msg: "{{ debian_apt_output.stdout_lines }}"
+#    when: ansible_os_family == 'Debian' and debian_apt_output.stdout_lines is defined
+
+- name: Guest os Kernel check and reboot if new version available
+  tags: [ never, kernelup ]
+  block:
+  - name: RHEL based os kernel new version check
+    shell: |
+      lvkn=$(uname -r)
+      ltkn=$(rpm -q --last kernel | head -n1 | awk '{ print $1 }' | sed 's/kernel-//')
+      if [ "$lvkn" != "$ltkn" ];
+      then
+        echo "1"
+      else
+        echo "0"
+      fi
+    register: rhel_new_krn
+    when: ansible_os_family == 'RedHat'
+
+  - name: Debian based os kernel new version check
+    shell: |
+      lvkn=$(uname -r)
+      ltkn=$(dpkg -l | awk '/linux-image-[0-9]+/{print $2}' | sort -V | tail -n1 | sed 's/linux-image-//')
+      if [ "$lvkn" != "$ltkn" ];
+      then
+        echo "1"
+      else
+        echo "0"
+      fi
+    register: debian_new_krn
+    when: ansible_os_family == 'Debian'
+
+# Comment this out if you need debug info on the kernel version check
+#  - name: RHEL based os kernel new version check output
+#    debug:
+#      msg: "{{ rhel_new_krn.stdout_lines }}"
+#    when: ansible_os_family == 'RedHat' and rhel_new_krn.stdout is defined
+#  - name: Debian based os kernel new version check output
+#    debug:
+#      msg: "{{ debian_new_krn.stdout_lines }}"
+#    when: ansible_os_family == 'Debian' and debian_new_krn.stdout is defined
+
+  - name: Reboot RHEL guest if new kernel version available
+    reboot:
+    when: ansible_os_family == 'RedHat' and rhel_new_krn.stdout == '1'
+
+  - name: Reboot Debian guest if new kernel version available
+    reboot:
+    when: ansible_os_family == 'Debian' and debian_new_krn.stdout == '1'
+
+- name: Backup snapshot removal triggered by cron
+  tags: [ never, snaprm ]
+  block:
+  - name: Backup snpashot removal
+    community.general.proxmox_snap:
+      api_user: "{{ pve_api_user }}"
+      api_token_id: "{{ pve_api_token_id }}"
+      api_token_secret: "{{ pve_api_token_secret }}"
+      api_host: "{{ pve_api_host }}"
+      vmid: "{{ item }}"
+      state: absent
+      snapname: "{{ snapshot_name }}"
+    loop: "{{ pve_vm_ids | flatten }}"
+    delegate_to: localhost
+    run_once: yes
+
+  - name: Remove snapshot removal cron
+    cron:
+      name: Guest patching - backup snapshot removal
+      cron_file: "/etc/cron.d/{{ snapshot_cron_file }}"
+      user: root
+      state: absent
+    delegate_to: localhost
+    run_once: yes

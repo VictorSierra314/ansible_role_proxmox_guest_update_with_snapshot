@@ -1,0 +1,5 @@
+---
+- hosts: localhost
+  remote_user: root
+  roles:
+    - rhel_update_with_proxmox_snapshot_and_autoremoval
