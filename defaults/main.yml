@@ -2,13 +2,13 @@
 # defaults file 
 #
 # Playbook path. Mandatory if you want to run the snpashot removal cron.
-playbook_path: /root/ansible_data/update_role_test.yml
+playbook_path: /path/to/your/playbook.yml
 
 # List all your VM IDs here. This will be used to take/delete snapshot
 pve_vm_ids:
-  - "{{ range(108, 110) | map('string') | list }}"
-#  - "{{ range(804, 806) | map('string') | list }}"
-#  - 102
+  - "{{ range(100, 160) | map('string') | list }}"
+  - "{{ range(200, 880) | map('string') | list }}"
+  - 999
 
 # Snapshot variables. Keep in mind that its name will be the ID used by the API to clean it up.
 snapshot_name: update_backup_snapshot
