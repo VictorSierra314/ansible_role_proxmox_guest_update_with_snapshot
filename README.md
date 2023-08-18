@@ -112,7 +112,7 @@ All API login info is in there. It's using the API token authentication process.
 
 Optional dependencies
 ------------
-This role can be combined with this other role: proxmox_offline_guest_power_on
+This role can be combined with this other role: victorsierra314.ansible_role_proxmox_offline_guest_power_on
 
 If you have any offline guests that you would like to patch at the same time. The above role combined with this one is a great way to patch everything in a single window.
 
