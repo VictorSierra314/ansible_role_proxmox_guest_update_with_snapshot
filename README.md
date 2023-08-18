@@ -17,7 +17,7 @@ The easy way:
 
 Have a second entry in your ansible inventory with the VMID in Proxmox. You can then use the same value for both the playbook inventory and the pve_vm_ids variable.
 ```
-- hosts: "{{ range(100, 160) | map('string') | list }}"
+- hosts: 1[0-5]*
   vars:
     pve_vm_ids:
       - "{{ range(100, 160) | map('string') | list }}"
@@ -123,10 +123,7 @@ If the following does not make sense, please read the IMPORTANT Requirements.
 
 The easy way:
 ```
-- hosts:
-    - "{{ range(100, 160) | map('string') | list }}"
-    - "{{ range(200, 880) | map('string') | list }}"
-    - 999
+- hosts: 1[0-5]*:[2-7]*:8[0-7]*:999
   vars:
     pve_vm_ids:
       - "{{ range(100, 160) | map('string') | list }}"
@@ -187,6 +184,7 @@ The hard way:
   roles: 
     - victorsierra314.ansible_role_proxmox_guest_update_with_snapshot 
 ```
+These are basic exemples with the bare minimum. If you are running multiple batch of guest at once you need to customise the playbook path and cron name to avoid overwriting files.
 
 
 License
