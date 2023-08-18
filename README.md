@@ -85,7 +85,9 @@ This one does not need to be run manually. It will be used by the cron schedule 
 
 Defaults variables
 ------------
-playbook_path: Reference the playbook path here. Mandatory for the snapshot removal task. pve_vm_ids: List all vmids here. It has to be a list because the role will loop into each id. You can use multiple ranges.
+playbook_path: Reference the playbook path here. Mandatory for the snapshot removal task.
+
+pve_vm_ids: List all vmids here. It has to be a list because the role will loop into each id. You can use multiple ranges.
 ```
 - "{{ range(100, 160) | map('string') | list }}"
 - "{{ range(200, 880) | map('string') | list }}"
