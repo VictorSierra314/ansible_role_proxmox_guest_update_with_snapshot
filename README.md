@@ -59,7 +59,7 @@ This way is more "heavy" but you can gather each host IP from their VMID through
 
 The hard way:
 
-Populate both inventories manually and make sure your ansible inventory list matches the IDs referenced in the pve_host_id variable.
+Populate both inventories manually and make sure your ansible inventory list matches the IDs referenced in the pve_host_ids variable.
 
 
 Additional requirements
