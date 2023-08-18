@@ -6,8 +6,10 @@ This role relies on Proxmox API to snapshot the guest before patching it. On a d
 IMPORTANT Requirements
 ------------
 This role requires at minimum 2 inputs.
-        - The ansible inventory for the update
-        - The VMIDs for the snapshot tasks
+
+- The ansible inventory for the update
+
+- The VMIDs for the snapshot tasks
 
 For security reasons, it's not possible to gather the VMID from the guest os. Both inventories have to be set in the playbook. There is 3 way to do this.
 
@@ -15,12 +17,12 @@ The easy way:
 
 Have a second entry in your ansible inventory with the VMID in Proxmox. You can then use the same value for both the playbook inventory and the pve_vm_ids variable.
 ```
-        - hosts: "{{ range(100, 160) | map('string') | list }}"
-          vars:
-            pve_vm_ids:
-              - "{{ range(100, 160) | map('string') | list }}"
-          roles:
-              - [...]
+- hosts: "{{ range(100, 160) | map('string') | list }}"
+  vars:
+    pve_vm_ids:
+      - "{{ range(100, 160) | map('string') | list }}"
+  roles:
+    - [...]
 ```
 
 The dynamic way:
@@ -28,31 +30,31 @@ The dynamic way:
 This way is more "heavy" but you can gather each host IP from their VMID through the API, add each IP to the play and run the update on this.
 
 ```
-        - hosts: localhost
-          gather_facts: no
-          tasks:
-            - name: Get Guest IP
-              ignore_errors: yes
-              uri:
-                url: "https://<pve>.<domain.loc>:8006/api2/json/nodes/<pve>/qemu/{{ item }}/agent/network-get-interfaces"
-                method: GET
-                headers:
-                  Content-Type: application/json
-                  Authorization: PVEAPIToken=<api_user>!<api_token_id>=<api_token_secret>
-                status_code: 200
-                validate_certs: no
-              register: guest_interfaces
-              loop: "{{ range(100, 160) | map('string') | list }}"
-            - name: Add ips to the play
-              add_host:
-                name: "{{ item.json.data.result[1]['ip-addresses'][0]['ip-address'] }}"
-                group: tmp_patching_group
-              loop: "{{ guest_interfaces.results }}"
+- hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Get Guest IP
+      ignore_errors: yes
+      uri:
+        url: "https://<pve>.<domain.loc>:8006/api2/json/nodes/<pve>/qemu/{{ item }}/agent/network-get-interfaces"
+        method: GET
+        headers:
+          Content-Type: application/json
+          Authorization: PVEAPIToken=<api_user>!<api_token_id>=<api_token_secret>
+        status_code: 200
+        validate_certs: no
+      register: guest_interfaces
+      loop: "{{ range(100, 160) | map('string') | list }}"
+    - name: Add ips to the play
+      add_host:
+        name: "{{ item.json.data.result[1]['ip-addresses'][0]['ip-address'] }}"
+        group: tmp_patching_group
+      loop: "{{ guest_interfaces.results }}"
 
-        - name: Run the role with the added IPs
-          hosts: tmp_patching_group
-          roles:
-            - [...]
+- name: Run the role with the added IPs
+  hosts: tmp_patching_group
+  roles:
+    - [...]
 ```
 
 The hard way:
@@ -85,9 +87,9 @@ Defaults variables
 ------------
 playbook_path: Reference the playbook path here. Mandatory for the snapshot removal task. pve_vm_ids: List all vmids here. It has to be a list because the role will loop into each id. You can use multiple ranges.
 ```
-  - "{{ range(100, 160) | map('string') | list }}"
-  - "{{ range(200, 880) | map('string') | list }}"
-  - 999
+- "{{ range(100, 160) | map('string') | list }}"
+- "{{ range(200, 880) | map('string') | list }}"
+- 999
 ```
 
 snapshot_name: Guest snapshot name used at creation and removal.
@@ -105,84 +107,90 @@ Vars Variables
 ------------
 All API login info is in there. It's using the API token authentication process. You have to provide the user id, user token id and secret.
 
+
 Optional dependencies
 ------------
 This role can be combined with this other role: proxmox_offline_guest_power_on
+
 If you have any offline guests that you would like to patch at the same time. The above role combined with this one is a great way to patch everything in a single window.
+
 
 Example Playbook
 ------------
 If the following does not make sense, please read the IMPORTANT Requirements.
+
 The easy way:
 ```
-        - hosts:
-            - "{{ range(100, 160) | map('string') | list }}"
-            - "{{ range(200, 880) | map('string') | list }}"
-            - 999
-          vars:
-            pve_vm_ids:
-              - "{{ range(100, 160) | map('string') | list }}"
-              - "{{ range(200, 880) | map('string') | list }}"
-              - 999
-            playbook_path: /path/to/your/playbook.yml
-          roles:
-              - victorsierra314.ansible_role_proxmox_guest_update_with_snapshot
+- hosts:
+    - "{{ range(100, 160) | map('string') | list }}"
+    - "{{ range(200, 880) | map('string') | list }}"
+    - 999
+  vars:
+    pve_vm_ids:
+      - "{{ range(100, 160) | map('string') | list }}"
+      - "{{ range(200, 880) | map('string') | list }}"
+      - 999
+    playbook_path: /path/to/your/playbook.yml
+  roles:
+    - victorsierra314.ansible_role_proxmox_guest_update_with_snapshot
 ```
 
 The dynamic way:
 ```
-        - hosts: localhost
-          gather_facts: no
-          tasks:
-            - name: Get Guest IP
-              ignore_errors: yes
-              uri:
-                url: "https://<pve>.<domain.loc>:8006/api2/json/nodes/<pve>/qemu/{{ item }}/agent/network-get-interfaces"
-                method: GET
-                headers:
-                  Content-Type: application/json
-                  Authorization: PVEAPIToken=<api_user>!<api_token_id>=<api_token_secret>
-                status_code: 200
-                validate_certs: no
-              register: guest_interfaces
-              loop:
-                - "{{ range(100, 160) | map('string') | list }}"
-                - "{{ range(200, 880) | map('string') | list }}"
-                - 999
-            - name: Add ips to the play
-              add_host:
-                name: "{{ item.json.data.result[1]['ip-addresses'][0]['ip-address'] }}"
-                group: tmp_patching_group
-              loop: "{{ guest_interfaces.results }}"
+- hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Get Guest IP
+      ignore_errors: yes
+      uri:
+        url: "https://<pve>.<domain.loc>:8006/api2/json/nodes/<pve>/qemu/{{ item }}/agent/network-get-interfaces"
+        method: GET
+        headers:
+          Content-Type: application/json
+          Authorization: PVEAPIToken=<api_user>!<api_token_id>=<api_token_secret>
+        status_code: 200
+        validate_certs: no
+      register: guest_interfaces
+      loop:
+        - "{{ range(100, 160) | map('string') | list }}"
+        - "{{ range(200, 880) | map('string') | list }}"
+        - 999
+    - name: Add ips to the play
+      add_host:
+        name: "{{ item.json.data.result[1]['ip-addresses'][0]['ip-address'] }}"
+        group: tmp_patching_group
+      loop: "{{ guest_interfaces.results }}"
 
-        - name: Run the role with the added IPs
-          hosts: tmp_patching_group
-          vars:
-            pve_vm_ids:
-              - "{{ range(100, 160) | map('string') | list }}"
-              - "{{ range(200, 880) | map('string') | list }}"
-              - 999
-            playbook_path: /path/to/your/playbook.yml
-          roles:
-              - victorsierra314.ansible_role_proxmox_guest_update_with_snapshot
+- name: Run the role with the added IPs
+  hosts: tmp_patching_group
+  vars:
+    pve_vm_ids:
+      - "{{ range(100, 160) | map('string') | list }}"
+      - "{{ range(200, 880) | map('string') | list }}"
+      - 999
+    playbook_path: /path/to/your/playbook.yml
+  roles:
+    - victorsierra314.ansible_role_proxmox_guest_update_with_snapshot
 ```
 
 The hard way:
 ```
-       - hosts: host_group:host1:host2 
-         vars: 
-           pve_vm_ids: 
-             - "{{ range(100, 160) | map('string') | list }}" 
-             - "{{ range(200, 880) | map('string') | list }}" 
-             - 999 
-           playbook_path: /path/to/your/playbook.yml 
-         roles: 
-             - victorsierra314.ansible_role_proxmox_guest_update_with_snapshot 
+- hosts: host_group:host1:host2 
+  vars: 
+    pve_vm_ids: 
+      - "{{ range(100, 160) | map('string') | list }}" 
+      - "{{ range(200, 880) | map('string') | list }}" 
+      - 999 
+    playbook_path: /path/to/your/playbook.yml 
+  roles: 
+    - victorsierra314.ansible_role_proxmox_guest_update_with_snapshot 
 ```
+
 
 License
 --------------
 BSD
+
 
 Author Information
 --------------
