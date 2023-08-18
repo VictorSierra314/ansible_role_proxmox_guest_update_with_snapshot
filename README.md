@@ -1,38 +1,207 @@
-ansible_role_proxmox_guest_update_with_snapshot
-===============================================
+ansible_roles_proxmox_guest_update_with_snapshot
+=========
 
-A brief description of the role goes here.
+This role relies on Proxmox API to snapshot the guest prior to patching it.
+On a defined number of VMIDs, a snapshot will be taken, a cron will be schedule to clean up the snbapshot at a set date and, the guest will be patched and optionally rebooted if the Kernel got an update.
+The different option are available through tags.
 
-Requirements
+
+IMPORTANT Requirements
 ------------
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+This role require at minimum 2 input.
+```
+        - The ansible inventory for the update
+        - The VMIDs for the snapshot tasks
+```
+For security reason it's not possible to gather the VMID from the guest os. Both inventory have to be set in the playbook.
+There is 3 way to do this.
 
-Role Variables
+The easy way:
+Have a second entry in your ansible inventory with the VMID in proxmox. You can then use the same value for both the playbook inventory and the pve_vm_ids variable.
+```
+        - hosts: "{{ range(100, 160) | map('string') | list }}"
+          vars:
+            pve_vm_ids:
+              - "{{ range(100, 160) | map('string') | list }}"
+          roles:
+              - [...]
+```
+
+The dynamic way:
+This way is more "heavy" but you can gather each host IP from their VMID through the API, add each IP to the play and run the update on this.
+```
+        - hosts: localhost
+          gather_facts: no
+          tasks:
+            - name: Get Guest IP
+              ignore_errors: yes
+              uri:
+                url: "https://<pve>.<domain.loc>:8006/api2/json/nodes/<pve>/qemu/{{ item }}/agent/network-get-interfaces"
+                method: GET
+                headers:
+                  Content-Type: application/json
+                  Authorization: PVEAPIToken=<api_user>!<api_token_id>=<api_token_secret>
+                status_code: 200
+                validate_certs: no
+              register: guest_interfaces
+              loop: "{{ range(100, 160) | map('string') | list }}"
+            - name: Add ips to the play
+              add_host:
+                name: "{{ item.json.data.result[1]['ip-addresses'][0]['ip-address'] }}"
+                group: tmp_patching_group
+              loop: "{{ guest_interfaces.results }}"
+
+        - name: Run the role with the added IPs
+          hosts: tmp_patching_group
+          roles:
+            - [...]
+```
+
+The hard way:
+Populate both inventory manually and make sure your ansible inventory list match the IDs referenced in the pve_host_id variable.
+
+
+Additional requirements
+------------
+
+Guest should be running otherwise the update task will fail.
+Snapshot tasks are independant from the update, even if the host is offline, the snapshot will be taken.
+To remove the snapshot, the same playbook and its inventory will be re-used.
+DO NOT remove or change the playbook path or inventory otherwise the snapshot will not be removed.
+The playbook to be re-used need to be referenced in the varaible: playbook_path (in defaults)
+
+
+Tags
 --------------
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+Tags are mandatory to run this role otherwise no action will taken.
+--tags update
+Run dnf update / apt upgrade with no exclusion. If you want to exclude some packages or limit the repos used by dnf, edit the task "Update RHEL based OS" and "Update Debian based OS". ansible-doc dnf and ansible-doc apt are your friends.
 
-Dependencies
+--tags kernelup
+No need to have both tags kernelup and update. kernelup will run the same update tasks.
+Run dnf update / apt upgrade with no exclusion. If you want to exclude some packages or limit the repos used by dnf, edit the task "Update RHEL based OS" and "Update Debian based OS". ansible-doc dnf and ansible-doc apt are your friends.
+Scan all host and reboot the ones with new available kernel versions.
+
+--tags snaprm
+This one does not need to be run manually. It will be used by the cron schedule during the upgrade.
+The cron will be schedule according to the value set in the defaults variables.
+
+
+Defaults variables
+--------------
+
+playbook_path: Reference the playbook path herei. Mandatory for the snpahsot removal task.
+pve_vm_ids: List all vmids here. It has to be a list because the role will loop into each id. You can use multiple range.
+```
+  - "{{ range(100, 160) | map('string') | list }}"
+  - "{{ range(200, 880) | map('string') | list }}"
+  - 999
+```
+snapshot_name: Guest snapshot name used at creation and removal.
+snapshot_cron_file: Cron file name for the snapshot removal in /ect/cron.d
+snapshot_rm_hour: Snapshot removal cron hour
+snapshot_rm_minute: Snapshot removal cron minute of the hour
+snapshot_removal_delay: Snapshot removal delay in days after patching
+
+
+Vars Variables
+--------------
+
+All API login info are in there.
+It's using the API token authentication process. You have to provide the user id, user token id and secret.
+
+
+Optional dependencie
 ------------
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+This role can be combine with this other role:
+proxmox_offline_guest_power_on
+
+If you have offline guest that you would like to patch at the same time. The above role combine with this one is a great way to patch everything in a single window.
+
 
 Example Playbook
 ----------------
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+If the following does not make sense, please read the IMPORTANT Requirements.
 
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+The easy way:
+```
+        - hosts:
+            - "{{ range(100, 160) | map('string') | list }}"
+            - "{{ range(200, 880) | map('string') | list }}"
+            - 999
+          vars:
+            pve_vm_ids:
+              - "{{ range(100, 160) | map('string') | list }}"
+              - "{{ range(200, 880) | map('string') | list }}"
+              - 999
+            playbook_path: /path/to/your/playbook.yml
+          roles:
+              - victorsierra314.ansible_role_proxmox_guest_update_with_snapshot
+```
 
-License
--------
+The dynamic way:
+```
+        - hosts: localhost
+          gather_facts: no
+          tasks:
+            - name: Get Guest IP
+              ignore_errors: yes
+              uri:
+                url: "https://<pve>.<domain.loc>:8006/api2/json/nodes/<pve>/qemu/{{ item }}/agent/network-get-interfaces"
+                method: GET
+                headers:
+                  Content-Type: application/json
+                  Authorization: PVEAPIToken=<api_user>!<api_token_id>=<api_token_secret>
+                status_code: 200
+                validate_certs: no
+              register: guest_interfaces
+              loop:
+                - "{{ range(100, 160) | map('string') | list }}"
+                - "{{ range(200, 880) | map('string') | list }}"
+                - 999
+            - name: Add ips to the play
+              add_host:
+                name: "{{ item.json.data.result[1]['ip-addresses'][0]['ip-address'] }}"
+                group: tmp_patching_group
+              loop: "{{ guest_interfaces.results }}"
 
-BSD
+        - name: Run the role with the added IPs
+          hosts: tmp_patching_group
+          vars:
+            pve_vm_ids:
+              - "{{ range(100, 160) | map('string') | list }}"
+              - "{{ range(200, 880) | map('string') | list }}"
+              - 999
+            playbook_path: /path/to/your/playbook.yml
+          roles:
+              - victorsierra314.ansible_role_proxmox_guest_update_with_snapshot
+```
 
-Author Information
-------------------
+The hard way: 
+``` 
+       - hosts: host_group:host1:host2 
+         vars: 
+           pve_vm_ids: 
+             - "{{ range(100, 160) | map('string') | list }}" 
+             - "{{ range(200, 880) | map('string') | list }}" 
+             - 999 
+           playbook_path: /path/to/your/playbook.yml 
+         roles: 
+             - victorsierra314.ansible_role_proxmox_guest_update_with_snapshot 
+``` 
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+
+License 
+------- 
+
+BSD 
+ 
+
+Author Information 
+------------------ 
+
+I have been working with Proxmox for quite some time now. Took me some time to get to gibhut but I'm glad I can share what I have built over the year. Enjoy.
