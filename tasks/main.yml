@@ -1,7 +1,7 @@
 ---
 # tasks file
 #
-- name: Guest os Patching
+- name: Block - Initial checks, Snapshot and cron creation
   tags: [ never, update, kernelup ]
   block:
   - name: Running checks
@@ -55,31 +55,67 @@
     delegate_to: localhost
     run_once: yes
 
+- name: Block - RHEL based guest update
+  tags: [ never, update, kernelup ]
+  block:
   - name: Update RHEL based OS
     dnf:
       name: "*"
       state: latest
     register: rhel_dnf_output
-    when: ansible_os_family == 'RedHat'
-
-  - name: Update Debian based OS
-    apt:
-      update_cache: yes
-      upgrade: yes
-    register: debian_apt_output
-    when: ansible_os_family == 'Debian'
 
 # Comment this out if you need debug info on the patching tasks
 #  - name: RHEL based OS patching output
 #    debug:
 #      msg: "{{ rhel_dnf_output.results }}"
-#    when: ansible_os_family == 'RedHat' and rhel_dnf_output.results is defined
+#    when: rhel_dnf_output.results is defined
+
+  rescue:
+  - name: Send a notification if the guest fail to update
+    mail:
+      subject: "ERROR - Ansible UPDATE FAILURE for {{ ansible_hostname }}"
+      body: |
+        Patching scheduled for {{ ansible_hostname }} FAILED
+        
+        Execution date: {{ ansible_date_time['date'] }} 
+        Execution time: {{ ansible_date_time['time'] }}
+        Error output: 
+        {{ rhel_dnf_output | to_yaml }}
+      to: "{{ notification_address }}"
+    delegate_to: localhost
+  when: ansible_os_family == 'RedHat'
+
+- name: Block - Debian based guest update
+  tags: [ never, update, kernelup ]
+  block:
+  - name: Update Debian based OS
+    apt:
+      update_cache: yes
+      upgrade: yes
+    register: debian_apt_output
+
+# Comment this out if you need debug info on the patching tasks
 #  - name: Debian based OS patching output
 #    debug:
 #      msg: "{{ debian_apt_output.stdout_lines }}"
-#    when: ansible_os_family == 'Debian' and debian_apt_output.stdout_lines is defined
+#    when: debian_apt_output.stdout_lines is defined
 
-- name: Guest os Kernel check and reboot if new version available
+  rescue:
+  - name: Send a notification if the guest fail to update
+    mail:
+      subject: "ERROR - Ansible UPDATE FAILURE for {{ ansible_hostname }}"
+      body: |
+        Patching scheduled for {{ ansible_hostname }} FAILED
+        
+        Execution date: {{ ansible_date_time['date'] }} 
+        Execution time: {{ ansible_date_time['time'] }}
+        Error output: 
+        {{ debian_apt_output | to_yaml }}
+      to: "{{ notification_address }}"
+    delegate_to: localhost
+  when: ansible_os_family == 'Debian'
+
+- name: Block - Guest os Kernel check and reboot if new version available
   tags: [ never, kernelup ]
   block:
   - name: RHEL based os kernel new version check

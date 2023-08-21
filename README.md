@@ -104,6 +104,8 @@ snapshot_rm_minute: Snapshot removal cron minute of the hour
 
 snapshot_removal_delay: Snapshot removal delay in days after patching
 
+notification_address: By default set to root, add any email address here to be notified when any update task fail
+
 
 Vars Variables
 ------------
