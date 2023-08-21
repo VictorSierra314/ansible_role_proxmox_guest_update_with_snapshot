@@ -44,7 +44,7 @@
   - name: Schedule snapshot removal cron {{ snapshot_removal_delay }}days later
     cron:
       name: Guest patching - backup snapshot removal
-      cron_file: /etc/cron.d/guest_patching_-_backup_snapshot_removal
+      cron_file: "/etc/cron.d/{{ snapshot_cron_file }}"
       minute: "{{ snapshot_rm_minute }}"
       hour: "{{ snapshot_rm_hour }}"
       day: "{{ snapshot_rm_date.stdout.split(' ')[0] }}"  
