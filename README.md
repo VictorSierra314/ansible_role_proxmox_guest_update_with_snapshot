@@ -191,7 +191,7 @@ These are basic exemples with the bare minimum. If you are running multiple batc
 
 License
 --------------
-BSD
+GNU General Public License v3.0
 
 
 Author Information
